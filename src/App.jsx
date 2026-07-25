@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   LayoutDashboard, Folder, FolderOpen, FileText, Briefcase, 
   LogOut, Plus, Search, Lock, Menu, X,
@@ -41,6 +41,30 @@ const initialNumbers = [];
 const initialJobOrders = [];
 
 const initialDocuments = [];
+
+const STORAGE_KEY = 'sso-app-state-v1';
+
+const loadStoredState = () => {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved ? JSON.parse(saved) : null;
+  } catch (error) {
+    console.error('Gagal membaca data tersimpan:', error);
+    return null;
+  }
+};
+
+const saveStoredState = (state) => {
+  if (typeof window === 'undefined') return;
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (error) {
+    console.error('Gagal menyimpan data:', error);
+  }
+};
 
 // ==========================================
 // KOMPONEN UI GLOBAL
@@ -500,13 +524,19 @@ const DashboardHome = ({ documents, jobOrders, onNavigate }) => {
 // ROOT APP (MAIN LAYOUT)
 // ==========================================
 export default function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [activeMenu, setActiveMenu] = useState('home'); 
+  const savedState = loadStoredState();
+
+  const [isLoggedIn, setIsLoggedIn] = useState(() => savedState?.isLoggedIn ?? false);
+  const [activeMenu, setActiveMenu] = useState(() => savedState?.activeMenu ?? 'home'); 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const [numbers, setNumbers] = useState(initialNumbers);
-  const [jobOrders, setJobOrders] = useState(initialJobOrders);
-  const [documents, setDocuments] = useState(initialDocuments);
+  const [numbers, setNumbers] = useState(() => savedState?.numbers ?? initialNumbers);
+  const [jobOrders, setJobOrders] = useState(() => savedState?.jobOrders ?? initialJobOrders);
+  const [documents, setDocuments] = useState(() => savedState?.documents ?? initialDocuments);
+
+  useEffect(() => {
+    saveStoredState({ isLoggedIn, activeMenu, numbers, jobOrders, documents });
+  }, [isLoggedIn, activeMenu, numbers, jobOrders, documents]);
 
   if (!isLoggedIn) {
     return <LoginScreen onLogin={() => setIsLoggedIn(true)} />;
