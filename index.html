@@ -1,12 +1,22 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="id">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>sso-app</title>
+    <title>PT SSO - ERP & DMS System</title>
+    
+    <!-- Memaksa Tailwind Render Secara Otomatis -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Konfigurasi Font Tambahan agar lebih berkelas -->
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+      body {
+        font-family: 'Plus Jakarta Sans', sans-serif;
+      }
+    </style>
   </head>
-  <body>
+  <body class="bg-[#070B14]">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
