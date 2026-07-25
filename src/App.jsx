@@ -5,6 +5,7 @@ import {
   FileDigit, Clock, CheckCircle2, XCircle, AlertCircle,
   Download, File, ChevronRight, FileUp, Copy, Check
 } from 'lucide-react';
+import { supabase } from './supabaseClient';
 
 // ==========================================
 // FUNGSI BANTUAN (HELPERS)
@@ -63,6 +64,81 @@ const saveStoredState = (state) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (error) {
     console.error('Gagal menyimpan data:', error);
+  }
+};
+
+const normalizeState = (state) => ({
+  isLoggedIn: state?.isLoggedIn ?? false,
+  activeMenu: state?.activeMenu ?? 'home',
+  numbers: state?.numbers ?? initialNumbers,
+  jobOrders: state?.jobOrders ?? initialJobOrders,
+  documents: state?.documents ?? initialDocuments,
+});
+
+const syncStateToSupabase = async ({ numbers, jobOrders, documents }) => {
+  try {
+    await Promise.all([
+      supabase.from('job_orders').upsert(
+        jobOrders.map((job) => ({
+          id: job.id,
+          joNumber: job.joNumber,
+          client: job.client,
+          projectName: job.projectName,
+          value: Number(job.value || 0),
+          startDate: job.startDate,
+          deadline: job.deadline,
+          pic: job.pic,
+          status: job.status,
+        })),
+        { onConflict: 'id' }
+      ),
+      supabase.from('numbering_records').upsert(
+        numbers.map((item) => ({
+          id: item.id,
+          docNumber: item.docNumber,
+          category: item.category,
+          description: item.description,
+          date: item.date,
+          pic: item.pic,
+          client: item.client || '-',
+        })),
+        { onConflict: 'id' }
+      ),
+      supabase.from('documents').upsert(
+        documents.map((doc) => ({
+          id: doc.id,
+          name: doc.name,
+          folderId: doc.folderId,
+          subfolder: doc.subfolder,
+          size: Number(doc.size || 0),
+          date: doc.date,
+          uploader: doc.uploader || 'User',
+          type: doc.type || 'application/octet-stream',
+        })),
+        { onConflict: 'id' }
+      ),
+    ]);
+  } catch (error) {
+    console.error('Gagal sinkronisasi Supabase:', error);
+  }
+};
+
+const loadStateFromSupabase = async () => {
+  try {
+    const [jobOrdersResult, numbersResult, documentsResult] = await Promise.allSettled([
+      supabase.from('job_orders').select('*').order('joNumber', { ascending: true }),
+      supabase.from('numbering_records').select('*').order('docNumber', { ascending: true }),
+      supabase.from('documents').select('*').order('date', { ascending: false }),
+    ]);
+
+    const jobOrders = jobOrdersResult.status === 'fulfilled' && !jobOrdersResult.value.error ? (jobOrdersResult.value.data || []) : [];
+    const numbers = numbersResult.status === 'fulfilled' && !numbersResult.value.error ? (numbersResult.value.data || []) : [];
+    const documents = documentsResult.status === 'fulfilled' && !documentsResult.value.error ? (documentsResult.value.data || []) : [];
+
+    return { jobOrders, numbers, documents };
+  } catch (error) {
+    console.error('Gagal memuat data Supabase:', error);
+    return null;
   }
 };
 
@@ -533,10 +609,30 @@ export default function App() {
   const [numbers, setNumbers] = useState(() => savedState?.numbers ?? initialNumbers);
   const [jobOrders, setJobOrders] = useState(() => savedState?.jobOrders ?? initialJobOrders);
   const [documents, setDocuments] = useState(() => savedState?.documents ?? initialDocuments);
+  const [isHydrated, setIsHydrated] = useState(false);
 
   useEffect(() => {
-    saveStoredState({ isLoggedIn, activeMenu, numbers, jobOrders, documents });
+    const hydrateFromSupabase = async () => {
+      const remoteState = await loadStateFromSupabase();
+      if (remoteState && (remoteState.jobOrders.length || remoteState.numbers.length || remoteState.documents.length)) {
+        setJobOrders(remoteState.jobOrders);
+        setNumbers(remoteState.numbers);
+        setDocuments(remoteState.documents);
+      }
+      setIsHydrated(true);
+    };
+
+    hydrateFromSupabase();
+  }, []);
+
+  useEffect(() => {
+    saveStoredState(normalizeState({ isLoggedIn, activeMenu, numbers, jobOrders, documents }));
   }, [isLoggedIn, activeMenu, numbers, jobOrders, documents]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    syncStateToSupabase({ numbers, jobOrders, documents });
+  }, [isHydrated, numbers, jobOrders, documents]);
 
   if (!isLoggedIn) {
     return <LoginScreen onLogin={() => setIsLoggedIn(true)} />;
